@@ -5,14 +5,15 @@ import Index from "./pages/Index";
 import ThreadPage from "./pages/ThreadPage";
 import ProfilePage from "./pages/ProfilePage";
 import TagPage from "./pages/TagPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 // Router component to handle NIP-19 identifiers dynamically
 function NIP19Router() {
   const { nip19 } = useParams<{ nip19: string }>();
-  
+
   if (!nip19) return <NotFound />;
-  
+
   // Route based on prefix
   if (nip19.startsWith('note1') || nip19.startsWith('nevent1')) {
     return <ThreadPage />;
@@ -20,7 +21,7 @@ function NIP19Router() {
   if (nip19.startsWith('npub1') || nip19.startsWith('nprofile1')) {
     return <ProfilePage />;
   }
-  
+
   return <NotFound />;
 }
 
@@ -31,6 +32,7 @@ export function AppRouter() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/t/:tag" element={<TagPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         {/* Catch-all for NIP-19 identifiers */}
         <Route path="/:nip19" element={<NIP19Router />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

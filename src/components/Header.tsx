@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoginArea } from '@/components/auth/LoginArea';
 import { CreatePostDialog } from '@/components/CreatePostDialog';
+import { RelayPicker } from '@/components/RelayPicker';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   TrendingUp,
   Clock,
   Settings,
+  Wifi,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -104,7 +106,10 @@ export function Header() {
           </nav>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Relay Picker */}
+            <RelayPicker />
+
             {/* Theme Toggle */}
             <Button
               variant="ghost"
@@ -161,8 +166,8 @@ export function Header() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/settings" className="flex items-center">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                    <Wifi className="h-4 w-4 mr-2" />
+                    Relays
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>

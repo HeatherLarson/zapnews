@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 
 // Popular relay presets
 const PRESET_RELAYS = [
+  { url: 'wss://bevo.nostr1.com', name: 'Bevo', description: 'Default relay' },
   { url: 'wss://relay.damus.io', name: 'Damus', description: 'Popular general relay' },
   { url: 'wss://relay.primal.net', name: 'Primal', description: 'Fast & reliable' },
   { url: 'wss://relay.nostr.band', name: 'Nostr.band', description: 'Search & discovery' },
@@ -22,7 +23,6 @@ const PRESET_RELAYS = [
   { url: 'wss://relay.snort.social', name: 'Snort', description: 'Social-focused relay' },
   { url: 'wss://relay.ditto.pub', name: 'Ditto', description: 'Soapbox relay' },
   { url: 'wss://purplepag.es', name: 'Purple Pages', description: 'Profile discovery' },
-  { url: 'wss://relay.nostr.wirednet.jp', name: 'Wirednet JP', description: 'Japanese relay' },
 ];
 
 interface RelayPickerProps {
@@ -42,12 +42,12 @@ export function RelayPicker({ className }: RelayPickerProps) {
 
   // Get the primary (first) relay for display
   const primaryRelay = currentRelays[0];
-  const primaryRelayName = PRESET_RELAYS.find(p => p.url === primaryRelay?.url)?.name 
+  const primaryRelayName = PRESET_RELAYS.find(p => p.url === primaryRelay?.url)?.name
     || getDomainFromUrl(primaryRelay?.url || '');
 
   const toggleRelay = (url: string) => {
     let newRelays;
-    
+
     if (activeRelayUrls.has(url)) {
       // Remove relay (but keep at least one)
       if (currentRelays.length <= 1) {
@@ -69,7 +69,7 @@ export function RelayPicker({ className }: RelayPickerProps) {
 
   const addCustomRelay = () => {
     const normalized = normalizeRelayUrl(customUrl);
-    
+
     if (!isValidRelayUrl(normalized)) {
       toast({
         title: 'Invalid URL',
@@ -90,7 +90,7 @@ export function RelayPicker({ className }: RelayPickerProps) {
     const newRelays = [...currentRelays, { url: normalized, read: true, write: true }];
     saveRelays(newRelays);
     setCustomUrl('');
-    
+
     toast({
       title: 'Relay added',
       description: `Connected to ${getDomainFromUrl(normalized)}`,
@@ -132,9 +132,9 @@ export function RelayPicker({ className }: RelayPickerProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className={cn("gap-1.5 text-muted-foreground hover:text-foreground", className)}
         >
           <Wifi className="h-3.5 w-3.5" />
@@ -194,9 +194,9 @@ export function RelayPicker({ className }: RelayPickerProps) {
               }}
               className="h-8 text-xs"
             />
-            <Button 
-              size="sm" 
-              variant="outline" 
+            <Button
+              size="sm"
+              variant="outline"
               className="h-8 px-2 shrink-0"
               onClick={addCustomRelay}
               disabled={!customUrl.trim()}

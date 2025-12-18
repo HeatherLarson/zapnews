@@ -82,7 +82,7 @@ export function ThreadPage() {
     webln,
     activeNWC
   );
-  const { data: commentsData, isLoading: commentsLoading } = useComments(thread!, 500);
+  const { data: commentsData, isLoading: commentsLoading } = useComments(thread, 500);
 
   // Set meta tags
   const title = thread?.tags.find(([name]) => name === 'title')?.[1] || 'Thread';
@@ -141,9 +141,9 @@ export function ThreadPage() {
           <div className="flex gap-3">
             {/* Zap Column */}
             <div className="flex flex-col items-center pt-1">
-              <ZapButton 
-                target={thread} 
-                className="text-muted-foreground hover:text-amber-500" 
+              <ZapButton
+                target={thread}
+                className="text-muted-foreground hover:text-amber-500"
                 showCount={false}
               />
             </div>
@@ -159,7 +159,7 @@ export function ThreadPage() {
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap mb-4">
                 <span>{commentCount} comments</span>
                 <span>\</span>
-                <Link 
+                <Link
                   to={`/${nip19.npubEncode(thread.pubkey)}`}
                   className="text-sky-600 hover:underline"
                 >
@@ -217,9 +217,9 @@ export function ThreadPage() {
               ) : (
                 <div className="space-y-0">
                   {commentsData?.topLevelComments.map((comment) => (
-                    <CommentItem 
-                      key={comment.id} 
-                      comment={comment} 
+                    <CommentItem
+                      key={comment.id}
+                      comment={comment}
                       root={thread}
                       getDirectReplies={commentsData.getDirectReplies}
                       depth={0}
@@ -236,8 +236,8 @@ export function ThreadPage() {
 }
 
 // Reply Form Component
-function ReplyForm({ root, parent, onSuccess }: { 
-  root: NostrEvent; 
+function ReplyForm({ root, parent, onSuccess }: {
+  root: NostrEvent;
   parent?: NostrEvent;
   onSuccess?: () => void;
 }) {
@@ -281,8 +281,8 @@ function ReplyForm({ root, parent, onSuccess }: {
         disabled={isPending}
       />
       <div className="flex justify-center">
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           disabled={!content.trim() || isPending}
           className="bg-amber-500 hover:bg-amber-600 text-white px-6"
         >
@@ -295,12 +295,12 @@ function ReplyForm({ root, parent, onSuccess }: {
 }
 
 // Comment Item Component - Stacker News Style
-function CommentItem({ 
-  comment, 
+function CommentItem({
+  comment,
   root,
   getDirectReplies,
-  depth = 0 
-}: { 
+  depth = 0
+}: {
   comment: NostrEvent;
   root: NostrEvent;
   getDirectReplies: (id: string) => NostrEvent[];
@@ -308,15 +308,15 @@ function CommentItem({
 }) {
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  
+
   const author = useAuthor(comment.pubkey);
   const { webln, activeNWC } = useWallet();
   const { totalSats } = useZaps(comment, webln, activeNWC);
-  
+
   const metadata = author.data?.metadata;
   const displayName = metadata?.name ?? genUserName(comment.pubkey);
   const timeAgo = formatDistanceToNow(new Date(comment.created_at * 1000), { addSuffix: false });
-  
+
   const replies = getDirectReplies(comment.id);
   const hasReplies = replies.length > 0;
 
@@ -325,9 +325,9 @@ function CommentItem({
       <div className="flex gap-2 py-3">
         {/* Zap button */}
         <div className="flex flex-col items-center pt-0.5 shrink-0">
-          <ZapButton 
-            target={comment} 
-            className="text-muted-foreground hover:text-amber-500" 
+          <ZapButton
+            target={comment}
+            className="text-muted-foreground hover:text-amber-500"
             showCount={false}
           />
         </div>
@@ -342,7 +342,7 @@ function CommentItem({
             <span>\</span>
             <span>{replies.length} {replies.length === 1 ? 'reply' : 'replies'}</span>
             <span>\</span>
-            <Link 
+            <Link
               to={`/${nip19.npubEncode(comment.pubkey)}`}
               className="text-sky-600 hover:underline"
             >
@@ -364,7 +364,7 @@ function CommentItem({
 
             {/* Collapse button */}
             {hasReplies && (
-              <button 
+              <button
                 onClick={() => setCollapsed(!collapsed)}
                 className="ml-auto hover:text-foreground"
               >
@@ -381,7 +381,7 @@ function CommentItem({
               </div>
 
               {/* Reply button */}
-              <button 
+              <button
                 onClick={() => setShowReplyForm(!showReplyForm)}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
@@ -391,8 +391,8 @@ function CommentItem({
               {/* Reply form */}
               {showReplyForm && (
                 <div className="mt-3">
-                  <ReplyForm 
-                    root={root} 
+                  <ReplyForm
+                    root={root}
                     parent={comment}
                     onSuccess={() => setShowReplyForm(false)}
                   />

@@ -2,12 +2,17 @@ import { NKinds, NostrEvent, NostrFilter } from '@nostrify/nostrify';
 import { useNostr } from '@nostrify/react';
 import { useQuery } from '@tanstack/react-query';
 
-export function useComments(root: NostrEvent | URL, limit?: number) {
+export function useComments(root: NostrEvent | URL | null | undefined, limit?: number) {
   const { nostr } = useNostr();
 
+  // Get the root identifier for the query key
+  const rootId = root instanceof URL ? root.toString() : root?.id;
+
   return useQuery({
-    queryKey: ['nostr', 'comments', root instanceof URL ? root.toString() : root.id, limit],
+    queryKey: ['nostr', 'comments', rootId, limit],
+    enabled: !!root && (root instanceof URL || !!root.id),
     queryFn: async (c) => {
+      if (!root) return { allComments: [], topLevelComments: [], getDescendants: () => [], getDirectReplies: () => [] };
       const filter: NostrFilter = { kinds: [1111] };
 
       if (root instanceof URL) {
@@ -57,7 +62,7 @@ export function useComments(root: NostrEvent | URL, limit?: number) {
         });
 
         const allDescendants = [...directReplies];
-        
+
         // Recursively get descendants of each direct reply
         for (const reply of directReplies) {
           allDescendants.push(...getDescendants(reply.id));

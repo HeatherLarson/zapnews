@@ -1,6 +1,6 @@
 import { useSeoMeta } from '@unhead/react';
 import { useParams, Link } from 'react-router-dom';
-import { nip19 } from 'nostr-tools';
+import { nip19, nip57 } from 'nostr-tools';
 import { formatDistanceToNow } from 'date-fns';
 import { Header } from '@/components/Header';
 import { NoteContent } from '@/components/NoteContent';
@@ -10,22 +10,25 @@ import { useAuthor } from '@/hooks/useAuthor';
 import { useZaps } from '@/hooks/useZaps';
 import { useWallet } from '@/hooks/useWallet';
 import { useComments } from '@/hooks/useComments';
+import { useAppContext } from '@/hooks/useAppContext';
 import { genUserName } from '@/lib/genUserName';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
-import { usePostComment } from '@/hooks/usePostComment';
+import { useNostrPublish } from '@/hooks/useNostrPublish';
+import { useToast } from '@/hooks/useToast';
 import { LoginArea } from '@/components/auth/LoginArea';
+import { WalletModal } from '@/components/WalletModal';
 import {
   Zap,
   MessageSquare,
-  Share2,
-  MoreHorizontal,
   ChevronDown,
   ChevronUp,
-  Send,
+  MoreHorizontal,
+  Loader2,
+  Wallet,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,14 +36,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import NotFound from './NotFound';
 import { useState } from 'react';
 import { NostrEvent } from '@nostrify/nostrify';
+import { useQueryClient } from '@tanstack/react-query';
+
+const REPLY_COST_SATS = 10;
 
 // Extract URL from content
 function extractUrl(content: string): string | null {
@@ -85,7 +86,7 @@ export function ThreadPage() {
   const { data: commentsData, isLoading: commentsLoading } = useComments(thread, 500);
 
   // Set meta tags
-  const title = thread?.tags.find(([name]) => name === 'title')?.[1] || 'Thread';
+  const title = thread?.tags.find(([name]) => name === 'title')?.[1] || thread?.content.slice(0, 50) || 'Thread';
   useSeoMeta({
     title: `${title} | Zap News`,
     description: thread?.content.slice(0, 160) || 'View this thread on Zap News',
@@ -152,7 +153,7 @@ export function ThreadPage() {
             <div className="flex-1 min-w-0">
               {/* Title */}
               <h1 className="text-xl font-semibold leading-tight mb-1">
-                {title}
+                {thread.tags.find(([name]) => name === 'title')?.[1] || title}
               </h1>
 
               {/* Meta line */}
@@ -190,9 +191,9 @@ export function ThreadPage() {
                 </div>
               )}
 
-              {/* Comment Form */}
+              {/* Comment Form - requires zap to post */}
               <div className="mb-8">
-                <ReplyForm root={thread} />
+                <ZapReplyForm target={thread} />
               </div>
 
               {/* Total Sats */}
@@ -235,29 +236,159 @@ export function ThreadPage() {
   );
 }
 
-// Reply Form Component
-function ReplyForm({ root, parent, onSuccess }: {
-  root: NostrEvent;
+// Zap-to-Reply Form Component
+function ZapReplyForm({ target, parent, onSuccess }: {
+  target: NostrEvent;
   parent?: NostrEvent;
   onSuccess?: () => void;
 }) {
   const [content, setContent] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  
   const { user } = useCurrentUser();
-  const { mutate: postComment, isPending } = usePostComment();
+  const { toast } = useToast();
+  const { config } = useAppContext();
+  const { webln, activeNWC } = useWallet();
+  const { mutateAsync: publishEvent } = useNostrPublish();
+  const queryClient = useQueryClient();
+  
+  // Get the post author to zap them
+  const postAuthor = useAuthor(target.pubkey);
+  const hasWallet = !!(webln || activeNWC);
+  const authorHasLightning = !!(postAuthor.data?.metadata?.lud16 || postAuthor.data?.metadata?.lud06);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !user) return;
+    if (!content.trim() || !user || isProcessing) return;
 
-    postComment(
-      { content: content.trim(), root, reply: parent },
-      {
-        onSuccess: () => {
-          setContent('');
-          onSuccess?.();
-        },
+    // Check if author can receive zaps
+    if (!authorHasLightning) {
+      toast({
+        title: 'Cannot zap author',
+        description: 'The post author does not have a Lightning address configured.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!hasWallet) {
+      setWalletModalOpen(true);
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Step 1: Create the zap request and get invoice
+      const zapEndpoint = await nip57.getZapEndpoint(postAuthor.data!.event!);
+      if (!zapEndpoint) {
+        throw new Error('Could not find zap endpoint for author');
       }
-    );
+
+      const zapAmount = REPLY_COST_SATS * 1000; // Convert to millisats
+
+      const zapRequest = nip57.makeZapRequest({
+        profile: target.pubkey,
+        event: target.id,
+        amount: zapAmount,
+        relays: config.relayMetadata.relays.map(r => r.url),
+        comment: `Reply: ${content.trim().slice(0, 100)}...`
+      });
+
+      // Sign the zap request
+      const signedZapRequest = await user.signer.signEvent(zapRequest);
+
+      // Get invoice from LNURL endpoint
+      const res = await fetch(`${zapEndpoint}?amount=${zapAmount}&nostr=${encodeURI(JSON.stringify(signedZapRequest))}`);
+      const responseData = await res.json();
+
+      if (!res.ok || !responseData.pr) {
+        throw new Error(responseData.reason || 'Failed to get invoice');
+      }
+
+      const invoice = responseData.pr;
+
+      // Step 2: Pay the invoice
+      let paid = false;
+
+      if (webln) {
+        try {
+          if (webln.enable) {
+            await webln.enable();
+          }
+          await webln.sendPayment(invoice);
+          paid = true;
+        } catch (e) {
+          console.log('WebLN payment failed:', e);
+        }
+      }
+
+      if (!paid && activeNWC) {
+        // TODO: Implement NWC payment
+        // For now, show error
+        throw new Error('Please connect a WebLN wallet to pay for replies');
+      }
+
+      if (!paid) {
+        throw new Error('Payment failed. Please try again.');
+      }
+
+      // Step 3: Post the comment after successful payment
+      const commentTags: string[][] = [];
+      
+      // Determine the root event
+      const rootEvent = parent || target;
+      
+      if (target.kind === 11) {
+        // NIP-22 style for kind 11 threads
+        commentTags.push(['K', String(target.kind)]);
+        commentTags.push(['E', target.id, '', target.pubkey]);
+        if (parent) {
+          commentTags.push(['e', parent.id, '', parent.pubkey]);
+        }
+      } else {
+        // NIP-10 style for kind 1 notes
+        commentTags.push(['e', target.id, '', 'root']);
+        if (parent && parent.id !== target.id) {
+          commentTags.push(['e', parent.id, '', 'reply']);
+        }
+        commentTags.push(['p', target.pubkey]);
+        if (parent && parent.pubkey !== target.pubkey) {
+          commentTags.push(['p', parent.pubkey]);
+        }
+      }
+
+      const commentKind = target.kind === 11 ? 1111 : 1;
+
+      await publishEvent({
+        kind: commentKind,
+        content: content.trim(),
+        tags: commentTags,
+      });
+
+      toast({
+        title: 'Reply posted! ⚡',
+        description: `Zapped ${REPLY_COST_SATS} sats to post your reply`,
+      });
+
+      setContent('');
+      
+      // Invalidate comments query to refresh
+      queryClient.invalidateQueries({ queryKey: ['nostr', 'comments'] });
+      
+      onSuccess?.();
+
+    } catch (error) {
+      console.error('Zap reply error:', error);
+      toast({
+        title: 'Failed to post reply',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (!user) {
@@ -272,25 +403,56 @@ function ReplyForm({ root, parent, onSuccess }: {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <Textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder="fractions of a penny for your thoughts?"
-        className="min-h-[100px] bg-muted/30 border-muted"
-        disabled={isPending}
-      />
-      <div className="flex justify-center">
-        <Button
-          type="submit"
-          disabled={!content.trim() || isPending}
-          className="bg-amber-500 hover:bg-amber-600 text-white px-6"
-        >
-          {isPending ? 'posting...' : 'reply'}
-          {!isPending && <span className="ml-2 text-xs opacity-75">10 sats</span>}
-        </Button>
-      </div>
-    </form>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <Textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="fractions of a penny for your thoughts?"
+          className="min-h-[100px] bg-muted/30 border-muted"
+          disabled={isProcessing}
+        />
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            type="submit"
+            disabled={!content.trim() || isProcessing || !authorHasLightning}
+            className="bg-amber-500 hover:bg-amber-600 text-white px-6"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                paying...
+              </>
+            ) : (
+              <>
+                reply
+                <span className="ml-2 text-xs opacity-75 flex items-center">
+                  <Zap className="h-3 w-3 mr-0.5" />
+                  {REPLY_COST_SATS} sats
+                </span>
+              </>
+            )}
+          </Button>
+          {!hasWallet && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWalletModalOpen(true)}
+            >
+              <Wallet className="h-4 w-4 mr-1" />
+              Connect
+            </Button>
+          )}
+        </div>
+        {!authorHasLightning && (
+          <p className="text-xs text-center text-muted-foreground">
+            Replies disabled - author has no Lightning address
+          </p>
+        )}
+      </form>
+      <WalletModal open={walletModalOpen} onOpenChange={setWalletModalOpen} />
+    </>
   );
 }
 
@@ -391,8 +553,8 @@ function CommentItem({
               {/* Reply form */}
               {showReplyForm && (
                 <div className="mt-3">
-                  <ReplyForm
-                    root={root}
+                  <ZapReplyForm
+                    target={root}
                     parent={comment}
                     onSuccess={() => setShowReplyForm(false)}
                   />

@@ -306,18 +306,23 @@ export function WalletModal({ children, className, open: controlledOpen, onOpenC
     </Dialog>
   );
 
+  // If controlled externally (open prop provided), don't render trigger
+  const isControlled = controlledOpen !== undefined;
+
   if (isMobile) {
     return (
       <>
         <Drawer open={open} onOpenChange={setOpen}>
-          <DrawerTrigger asChild>
-            {children || (
-              <Button variant="outline" size="sm" className={className}>
-                <Wallet className="h-4 w-4 mr-2" />
-                Wallet Settings
-              </Button>
-            )}
-          </DrawerTrigger>
+          {!isControlled && (
+            <DrawerTrigger asChild>
+              {children || (
+                <Button variant="outline" size="sm" className={className}>
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Wallet Settings
+                </Button>
+              )}
+            </DrawerTrigger>
+          )}
           <DrawerContent className="h-full">
             <DrawerHeader className="text-center relative">
               <DrawerClose asChild>
@@ -372,14 +377,16 @@ export function WalletModal({ children, className, open: controlledOpen, onOpenC
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          {children || (
-            <Button variant="outline" size="sm" className={className}>
-              <Wallet className="h-4 w-4 mr-2" />
-              Wallet Settings
-            </Button>
-          )}
-        </DialogTrigger>
+        {!isControlled && (
+          <DialogTrigger asChild>
+            {children || (
+              <Button variant="outline" size="sm" className={className}>
+                <Wallet className="h-4 w-4 mr-2" />
+                Wallet Settings
+              </Button>
+            )}
+          </DialogTrigger>
+        )}
         <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
